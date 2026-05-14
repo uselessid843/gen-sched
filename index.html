@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outbuild — Schedule Generator Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green:        #1D9E75;
+  --green-bg:     #E1F5EE;
+  --green-border: #9FE1CB;
+  --green-text:   #0F6E56;
+  --amber:        #EF9F27;
+  --amber-bg:     #FDF4E1;
+  --amber-border: #F4DDA9;
+  --amber-text:   #7a4f10;
+  --border:       #e8e8e8;
+  --border-light: #f0f0f0;
+  --muted:        #6b7280;
+  --muted-light:  #9ca3af;
+  --surface:      #ffffff;
+  --bg:           #f7f8fa;
+  --text:         #111827;
+  --text-2:       #374151;
+  --r-card:       10px;
+  --r-pill:       999px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 99px; }
+
+/* ─── App Shell ─── */
+.app-shell { height: 100vh; display: flex; flex-direction: column; background: #fff; }
+
+.topbar {
+  height: 46px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.topbar-logo {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 14.5px; font-weight: 700; color: var(--text);
+  margin-right: 20px;
+}
+.topbar-logo svg { width: 17px; height: 17px; color: var(--green); }
+
+.breadcrumb {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; color: var(--muted);
+}
+.breadcrumb .sep { color: #c8c8c8; font-size: 15px; }
+
+.bc-project { position: relative; }
+
+.bc-btn {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 13px; font-weight: 500; color: var(--text);
+  background: none; border: none; cursor: pointer;
+  padding: 3px 7px; border-radius: 5px;
+  transition: background .12s;
+}
+.bc-btn:hover { background: #f3f4f6; }
+.bc-btn svg { color: var(--muted); }
+
+.bc-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0;
+  background: #fff; border: 1px solid var(--border);
+  border-radius: 9px; box-shadow: 0 6px 20px rgba(0,0,0,.10);
+  min-width: 200px; z-index: 100; overflow: hidden; display: none;
+}
+.bc-dropdown.open { display: block; }
+
+.dd-item {
+  padding: 9px 13px; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 7px; color: var(--text-2);
+  transition: background .1s;
+}
+.dd-item:hover { background: #f9fafb; }
+.dd-item.new { color: var(--green); font-weight: 600; border-top: 1px solid var(--border-light); }
+
+.app-content { flex: 1; overflow: hidden; background: var(--bg); }
+
+/* ─── Fake Gantt ─── */
+.gantt { width: 100%; height: 100%; overflow: hidden; }
+.gantt-hdr { display: flex; height: 34px; background: #fff; border-bottom: 1px solid var(--border); align-items: center; }
+.gantt-hdr-name { width: 196px; flex-shrink: 0; padding: 0 14px; font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; border-right: 1px solid var(--border); }
+.gantt-months { flex: 1; display: flex; }
+.gantt-mo { flex: 1; padding: 0 10px; font-size: 10.5px; font-weight: 500; color: var(--muted-light); display: flex; align-items: center; border-right: 1px solid var(--border-light); }
+.gantt-row { display: flex; height: 30px; border-bottom: 1px solid var(--border-light); align-items: center; }
+.gantt-row:nth-child(even) { background: #fafafa; }
+.gantt-name { width: 196px; flex-shrink: 0; padding: 0 14px; font-size: 12px; color: var(--text-2); border-right: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-bars { flex: 1; position: relative; height: 100%; }
+.gantt-bar { position: absolute; height: 13px; top: 50%; transform: translateY(-50%); border-radius: 3px; background: var(--green-bg); border: 1px solid var(--green-border); }
+
+/* ─── Scrim ─── */
+.scrim {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(15,23,42,.32);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .18s ease;
+}
+.scrim.open { opacity: 1; pointer-events: all; }
+
+/* ─── Modal ─── */
+.modal {
+  width: min(1200px, calc(100vw - 40px));
+  height: min(780px, calc(100vh - 40px));
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.06);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: scale(.97) translateY(6px);
+  transition: transform .22s cubic-bezier(.16,1,.3,1);
+}
+.scrim.open .modal { transform: scale(1) translateY(0); }
+
+/* ─── Modal Header ─── */
+.modal-hdr {
+  height: 50px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 18px;
+  background: #fff;
+}
+
+.hdr-brand {
+  display: flex; align-items: center; gap: 7px;
+  min-width: 200px; flex-shrink: 0;
+}
+.hdr-brand svg { width: 19px; height: 19px; color: var(--green); flex-shrink: 0; }
+.brand-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.brand-label strong { color: var(--text); font-weight: 700; }
+
+.hdr-stepper {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+}
+
+.step-item {
+  display: flex; align-items: center; gap: 0;
+  cursor: pointer; user-select: none;
+}
+.step-inner { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; transition: background .12s; }
+.step-item:hover .step-inner { background: #f3f4f6; }
+
+.step-circle {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  transition: all .2s;
+}
+.step-label { font-size: 12px; font-weight: 500; white-space: nowrap; transition: color .2s; }
+
+.step-item[data-state="inactive"] .step-circle { border: 1.5px solid #d1d5db; color: #b0b7c0; }
+.step-item[data-state="inactive"] .step-label { color: #b0b7c0; font-weight: 400; }
+.step-item[data-state="active"] .step-circle { background: #111827; color: #fff; border: none; }
+.step-item[data-state="active"] .step-label { color: #111827; font-weight: 600; }
+.step-item[data-state="done"] .step-circle { background: var(--green); color: #fff; border: none; }
+.step-item[data-state="done"] .step-label { color: var(--green-text); font-weight: 500; }
+
+.step-line { width: 24px; height: 1.5px; background: #e2e2e2; margin: 0 2px; flex-shrink: 0; transition: background .3s; }
+.step-line.done { background: var(--green); }
+
+.hdr-close {
+  min-width: 200px; flex-shrink: 0; display: flex; justify-content: flex-end;
+}
+.btn-close {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+  background: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); transition: background .12s, color .12s;
+}
+.btn-close:hover { background: #f3f4f6; color: var(--text-2); }
+
+/* ─── Modal Body ─── */
+.modal-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* ─── Chat Panel ─── */
+.chat-panel {
+  width: 50%; flex-shrink: 0; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; background: #fff;
+}
+
+.chat-thread {
+  flex: 1; overflow-y: auto; padding: 20px 18px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  scroll-behavior: smooth;
+}
+
+.chat-bubble { display: flex; align-items: flex-start; gap: 9px; }
+.chat-bubble.user { flex-direction: row-reverse; }
+
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--green); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #fff; margin-top: 1px;
+}
+.avatar svg { width: 13px; height: 13px; }
+
+.bubble-body {
+  background: #f4f5f7;
+  border-radius: 14px;
+  padding: 11px 14px;
+  font-size: 13.5px; line-height: 1.58; color: var(--text-2);
+  max-width: 440px;
+}
+.bubble-body strong { color: var(--text); font-weight: 600; }
+.chat-bubble.user .bubble-body { background: #f4f5f7; }
+
+.composer {
+  border-top: 1px solid var(--border);
+  padding: 11px 14px;
+  display: flex; align-items: center; gap: 8px;
+  background: #fff;
+}
+.composer-input {
+  flex: 1; height: 36px; border: 1.5px solid #e0e0e0; border-radius: 8px;
+  padding: 0 12px; font-size: 13.5px; font-family: inherit; color: var(--text);
+  outline: none; transition: border-color .15s, box-shadow .15s; background: #fff;
+}
+.composer-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,.10); }
+.composer-input::placeholder { color: var(--muted-light); }
+
+.btn-send {
+  width: 34px; height: 34px; border-radius: 9px; background: var(--green);
+  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #fff; transition: filter .12s;
+}
+.btn-send:hover { filter: brightness(.92); }
+.btn-send svg { width: 15px; height: 15px; }
+
+/* ─── Right Panel ─── */
+.right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f7f8fa; }
+
+.tab-bar {
+  height: 44px; flex-shrink: 0; border-bottom: 1px solid var(--border);
+  display: flex; align-items: stretch; padding: 0 20px;
+  background: #fff;
+}
+.tab-btn {
+  background: none; border: none; border-bottom: 2.5px solid transparent;
+  padding: 0 2px; margin-right: 20px; margin-bottom: -1px;
+  font-size: 13px; font-weight: 500; color: var(--muted);
+  cursor: pointer; transition: color .12s, border-color .12s; font-family: inherit;
+  letter-spacing: -.01em;
+}
+.tab-btn:hover { color: var(--text-2); }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--green); font-weight: 600; }
+
+.tab-badge {
+  margin-left: auto; align-self: center;
+  font-size: 11px; font-weight: 600; color: var(--green-text);
+  background: var(--green-bg); border: 1px solid var(--green-border);
+  border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+  letter-spacing: .01em;
+}
+
+.tab-pane {
+  flex: 1; overflow-y: auto; padding: 16px 16px 24px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: #f7f8fa;
+}
+.tab-pane.hidden { display: none; }
+
+/* ─── Section Card ─── */
+.sec-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 16px 18px;
+}
+
+/* ─── Section Heading ─── */
+.sec-head {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted-light); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.sec-head::after {
+  content: ''; flex: 1; height: 1px; background: var(--border-light);
+}
+
+/* ─── Tile Grid ─── */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.tile {
+  border: 1px solid #eaeaea; border-radius: 9px;
+  padding: 10px 12px; cursor: default; background: #fafafa;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.tile:hover { background: #f2fbf7; border-color: #b7ead2; box-shadow: 0 1px 4px rgba(29,158,117,.06); }
+.tile.span2 { grid-column: span 2; }
+.tile.span3 { grid-column: span 3; }
+
+.tile-lbl {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .09em; color: #b0b7c0; margin-bottom: 4px;
+}
+.tile-val {
+  font-size: 15.5px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 4px; line-height: 1.25;
+}
+.tile-val .amber { color: var(--amber); }
+.tile-val select {
+  font-size: 15.5px; font-weight: 600; color: var(--text);
+  border: none; background: none; font-family: inherit; cursor: pointer;
+  outline: none; -webkit-appearance: none; appearance: none;
+  padding-right: 18px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b7c0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0 center;
+}
+
+/* ─── Chips ─── */
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  padding: 4px 11px; border-radius: 999px;
+  border: 1px solid #e2e2e2; font-size: 12px; font-weight: 500;
+  color: #4b5563; background: #fafafa; cursor: pointer;
+  transition: all .14s; user-select: none; line-height: 1.4;
+}
+.chip:hover { border-color: #c8c8c8; background: #f3f4f6; color: var(--text); }
+.chip.on { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+
+/* ─── Optional Textarea ─── */
+.field-lbl {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: #b0b7c0; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.opt-tag { text-transform: none; font-weight: 400; color: #d1d5db; font-size: 10.5px; letter-spacing: 0; }
+
+.opt-textarea {
+  width: 100%; border: 1px solid #e8e8e8; border-radius: 8px;
+  padding: 10px 12px; font-size: 13px; font-family: inherit; color: var(--text-2);
+  resize: vertical; min-height: 60px; outline: none; line-height: 1.5;
+  transition: border-color .15s, box-shadow .15s; background: #fff;
+}
+.opt-textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,.08); }
+.opt-textarea::placeholder { color: #c4c7ce; }
+
+/* ─── Accordions ─── */
+.acc-list { display: flex; flex-direction: column; gap: 4px; }
+.acc {
+  border: 1px solid #eaeaea; border-radius: 9px;
+  overflow: hidden; background: #fff; transition: border-color .18s, box-shadow .18s;
+}
+.acc:hover:not(.open) { border-color: #d4d4d4; }
+.acc.open { border-color: #c5d9ff; box-shadow: 0 0 0 3px rgba(96,165,250,.10); }
+
+.acc-hdr {
+  display: flex; align-items: center; padding: 11px 14px;
+  cursor: pointer; user-select: none; background: #fff; transition: background .1s;
+  gap: 8px; min-height: 44px;
+}
+.acc.open .acc-hdr { background: #f8fbff; }
+.acc-hdr:hover:not(.acc.open .acc-hdr) { background: #fafafa; }
+
+.acc-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.acc-sel-all { font-size: 11.5px; color: var(--green); cursor: pointer; font-weight: 500; white-space: nowrap; }
+.acc-sel-all:hover { text-decoration: underline; }
+
+.acc-badge {
+  height: 20px; min-width: 20px; border-radius: 10px;
+  background: #374151; color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  padding: 0 5px;
+}
+.chevron {
+  width: 15px; height: 15px; color: #c4c7ce; flex-shrink: 0;
+  transition: transform .2s;
+}
+.acc.open .chevron { transform: rotate(180deg); color: var(--muted); }
+
+.acc-body { display: none; padding: 12px 14px 14px; border-top: 1px solid #f0f0f0; background: #fff; }
+.acc.open .acc-body { display: block; }
+
+/* ─── Checkbox Grid ─── */
+.cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.cb-item {
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font-size: 13px; color: var(--text-2); user-select: none;
+}
+.custom-cb {
+  width: 20px; height: 20px; border-radius: 5px;
+  border: 1.5px solid #d1d5db; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all .14s;
+}
+.custom-cb.on { background: var(--green); border-color: var(--green); }
+.custom-cb svg { width: 11px; height: 11px; color: #fff; display: none; }
+.custom-cb.on svg { display: block; }
+
+/* ─── Styled Select & Number Input ─── */
+.s-select {
+  border: 1px solid #e8e8e8; border-radius: 7px; padding: 8px 10px;
+  font-size: 13px; font-family: inherit; color: var(--text); background: #fff;
+  outline: none; cursor: pointer; width: 100%; transition: border-color .15s;
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b7c0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 28px;
+}
+.s-select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,.08); }
+
+.n-input {
+  border: 1px solid #e8e8e8; border-radius: 7px; padding: 8px 10px;
+  font-size: 13px; font-family: inherit; color: var(--text); width: 100%;
+  outline: none; transition: border-color .15s; background: #fff;
+}
+.n-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,.08); }
+
+/* ─── Segmented Control ─── */
+.seg {
+  display: flex; border: 1.5px solid #e0e0e0; border-radius: 8px;
+  overflow: hidden; background: #f9fafb;
+}
+.seg-btn {
+  flex: 1; padding: 7px 8px; font-size: 12.5px; font-weight: 500; color: var(--text-2);
+  border: none; background: none; cursor: pointer; transition: all .15s;
+  font-family: inherit; text-align: center; line-height: 1.3;
+}
+.seg-btn + .seg-btn { border-left: 1px solid #e0e0e0; }
+.seg-btn.on { background: #111827; color: #fff; }
+
+/* ─── Floors Table ─── */
+.floors-tbl {
+  width: 100%; border: 1px solid #ebebeb; border-radius: 8px;
+  overflow: hidden; max-height: 215px; overflow-y: auto; background: #fff;
+}
+.ft-row {
+  display: flex; align-items: center; padding: 7px 12px;
+  border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.ft-row:last-child { border-bottom: none; }
+.ft-name { font-weight: 600; color: var(--text); min-width: 70px; }
+.ft-zones { color: var(--muted); font-size: 12.5px; }
+
+/* ─── Spatial 2-col ─── */
+.spatial-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ─── Schedule Summary (Preview top card) ─── */
+.sched-summary {
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.sched-summary.hidden { display: none; }
+
+/* Top bar: title + badge */
+.ss-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px 10px;
+}
+.ss-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted-light);
+}
+.ss-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--green-bg); border: 1px solid var(--green-border);
+  border-radius: 999px; padding: 3px 10px 3px 8px;
+  font-size: 11.5px; font-weight: 600; color: var(--green-text);
+}
+.ss-badge svg { width: 12px; height: 12px; }
+
+/* Stat row */
+.ss-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.ss-stat {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 12px 8px; text-align: center;
+  border-right: 1px solid var(--border-light);
+}
+.ss-stat:last-child { border-right: none; }
+.ss-stat-val {
+  font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1;
+  letter-spacing: -.02em;
+}
+.ss-stat-lbl {
+  font-size: 10.5px; font-weight: 500; color: var(--muted-light);
+  margin-top: 3px; white-space: nowrap;
+}
+
+/* Detail rows */
+.ss-details {
+  display: grid; grid-template-columns: 72px 1fr;
+  padding: 4px 0;
+}
+.ss-dk {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+  color: #c4c7ce; padding: 6px 0 6px 18px;
+  display: flex; align-items: center;
+  border-bottom: 1px solid #f9f9f9;
+}
+.ss-dv {
+  font-size: 12px; font-weight: 500; color: var(--text-2);
+  padding: 6px 18px 6px 4px;
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  border-bottom: 1px solid #f9f9f9;
+}
+.ss-details .ss-dk:last-of-type,
+.ss-details .ss-dv:last-of-type { border-bottom: none; }
+
+.ss-pill {
+  display: inline-flex; align-items: center;
+  background: #f3f4f6; border-radius: 4px;
+  padding: 1px 6px; font-size: 11px; font-weight: 600; color: #374151;
+}
+.ss-pill.green { background: var(--green-bg); color: var(--green-text); }
+.ss-pill.amber { color: var(--amber-text); background: var(--amber-bg); }
+.ss-sep { color: #e0e0e0; }
+
+/* Phase bar section */
+.ss-phases {
+  border-top: 1px solid var(--border-light);
+  padding: 12px 18px 14px;
+}
+.ss-phases-title {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+  color: #c4c7ce; margin-bottom: 10px;
+}
+.ss-phase-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 7px;
+}
+.ss-phase-row:last-child { margin-bottom: 0; }
+.ss-phase-name {
+  font-size: 11px; font-weight: 500; color: var(--muted); min-width: 100px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ss-phase-track {
+  flex: 1; height: 5px; background: #f0f0f0; border-radius: 3px; overflow: hidden;
+}
+.ss-phase-fill { height: 100%; border-radius: 3px; }
+.ss-phase-dur {
+  font-size: 10.5px; color: var(--muted-light); font-variant-numeric: tabular-nums;
+  min-width: 30px; text-align: right;
+}
+
+/* keep old ps-tag etc. for anything still referencing them */
+.ps-tag {
+  display: inline-flex; align-items: center;
+  background: #f3f4f6; border-radius: 5px;
+  padding: 2px 7px; font-size: 11px; font-weight: 600; color: #374151;
+}
+.ps-tag.green { background: var(--green-bg); color: var(--green-text); }
+.ps-tag.amber { background: var(--amber-bg); color: var(--amber-text); }
+.ps-dot { color: #d1d5db; margin: 0 2px; }
+
+/* ─── Preview flat list ─── */
+.prev-col-hdr {
+  display: flex; align-items: center;
+  padding: 0 14px 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.prev-col-act {
+  flex: 1; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted-light);
+}
+.prev-col-dur {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted-light);
+  padding-right: 24px;
+}
+
+/* Section group */
+.wbs-group { margin-top: 4px; }
+.wbs-group-hdr {
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px 14px 6px;
+  cursor: pointer; user-select: none;
+}
+.wbs-group-chev {
+  font-size: 10px; color: var(--muted); transition: transform .18s; flex-shrink: 0;
+  display: flex; align-items: center;
+}
+.wbs-group.collapsed .wbs-group-chev { transform: rotate(-90deg); }
+.wbs-group-name {
+  font-size: 13.5px; font-weight: 500; color: var(--text-2);
+}
+.wbs-group-body { }
+.wbs-group.collapsed .wbs-group-body { display: none; }
+
+/* Activity row */
+.act-row {
+  display: flex; align-items: center;
+  padding: 0 14px 0 10px;
+  min-height: 44px;
+  transition: background .1s;
+  cursor: default;
+  position: relative;
+}
+.act-row:hover { background: #f7f8fa; }
+.act-row:hover .act-remove { opacity: 1; }
+.act-row.drag-over-top::before {
+  content: ''; position: absolute; top: 0; left: 10px; right: 10px;
+  height: 2px; background: var(--green); border-radius: 1px;
+}
+.act-row.drag-over-bot::after {
+  content: ''; position: absolute; bottom: 0; left: 10px; right: 10px;
+  height: 2px; background: var(--green); border-radius: 1px;
+}
+.act-row.dragging { opacity: .35; }
+
+.act-handle {
+  width: 24px; display: flex; align-items: center; justify-content: center;
+  cursor: grab; flex-shrink: 0; color: #d1d5db;
+  font-size: 13px; line-height: 1; padding-top: 1px;
+  letter-spacing: 1.5px;
+}
+.act-handle:active { cursor: grabbing; }
+.act-handle:hover { color: #9ca3af; }
+
+.act-name {
+  flex: 1; font-size: 15px; font-weight: 400; color: var(--text);
+  line-height: 1.3; padding: 12px 12px 12px 4px;
+}
+
+.act-dur {
+  font-size: 14px; font-weight: 400; color: var(--muted-light);
+  font-variant-numeric: tabular-nums; min-width: 36px; text-align: right;
+  padding-right: 12px;
+}
+
+.act-remove {
+  width: 20px; height: 20px; border: none; background: none; cursor: pointer;
+  color: #c4c7ce; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: color .1s; font-size: 15px; line-height: 1;
+  opacity: 0; flex-shrink: 0; padding: 0;
+}
+.act-remove:hover { color: #6b7280; }
+
+/* Remove animation */
+@keyframes fade-out-row {
+  from { opacity: 1; max-height: 60px; }
+  to   { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+.act-row.removing {
+  overflow: hidden;
+  animation: fade-out-row .22s ease forwards;
+}
+
+/* ─── Footer ─── */
+.modal-ftr {
+  height: 50px; flex-shrink: 0; border-top: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 18px; background: #fff;
+}
+.ftr-proj { flex: 1; }
+.ftr-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.ftr-addr { font-size: 11.5px; color: var(--muted-light); margin-top: 1px; }
+
+.ftr-right { display: flex; align-items: center; gap: 12px; }
+.step-ctr { font-size: 13px; color: var(--muted); }
+.step-ctr strong { color: var(--text); font-weight: 700; }
+
+.btn-next {
+  height: 35px; padding: 0 16px; background: #111827; color: #fff;
+  border: none; border-radius: 999px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  transition: background .14s, transform .08s; font-family: inherit;
+}
+.btn-next:hover { background: #1c2636; }
+.btn-next:active { transform: scale(.98); }
+.btn-next.confirm { background: var(--green); }
+.btn-next.confirm:hover { background: #178a65; }
+
+/* ─── CoBuilder Dock ─── */
+.dock {
+  position: fixed; bottom: -80px; right: 22px;
+  background: #111827; border-radius: 12px 12px 0 0; padding: 12px 18px;
+  display: flex; align-items: center; gap: 11px; color: #fff; z-index: 300;
+  transition: bottom .28s cubic-bezier(.16,1,.3,1); box-shadow: 0 -4px 24px rgba(0,0,0,.18);
+  min-width: 300px;
+}
+.dock.up { bottom: 0; }
+.dock-icon { width: 32px; height: 32px; background: var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.dock-icon svg { width: 15px; height: 15px; color: #fff; }
+.dock-text { flex: 1; }
+.dock-title { font-size: 13.5px; font-weight: 600; }
+.dock-sub { font-size: 12px; color: #8e9aad; margin-top: 1px; }
+.dock-x { background: none; border: none; color: #6b7280; cursor: pointer; padding: 3px; border-radius: 4px; font-size: 16px; line-height: 1; }
+.dock-x:hover { color: #fff; }
+
+/* ─── Utility ─── */
+.sec-block { display: flex; flex-direction: column; gap: 12px; }
+
+/* ─── Chat enhancements ─── */
+
+/* User bubble — right-aligned with green tint */
+.chat-bubble.user .bubble-body {
+  background: #edfaf4;
+  border: 1px solid #c5ead8;
+  color: #0f4a36;
+}
+
+/* System update bubble — compact, no avatar, green-tinted */
+.chat-bubble.system {
+  padding-left: 37px; /* indent to align with avatar-less messages */
+}
+.sys-bubble {
+  display: inline-flex; align-items: flex-start; gap: 7px;
+  background: #f6fef9; border: 1px solid #d0f0e2; border-radius: 10px;
+  padding: 8px 12px; font-size: 12.5px; color: #1a6b4a; line-height: 1.5;
+  max-width: 440px;
+}
+.sys-bubble svg { width: 13px; height: 13px; color: var(--green); flex-shrink: 0; margin-top: 1px; }
+.sys-bubble strong { font-weight: 600; color: #0f4a36; }
+
+/* Typing indicator */
+.typing-bubble .bubble-body {
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 4px;
+}
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #b0b7c0;
+  animation: blink 1.2s infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes blink {
+  0%, 80%, 100% { opacity: .3; transform: scale(.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+/* Send button — disabled state */
+.btn-send.empty { background: #d1d5db; cursor: default; }
+.btn-send.empty:hover { filter: none; }
+
+/* Shake animation for empty submit */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.shake { animation: shake .3s ease; }
+</style>
+</head>
+<body>
+
+<!-- App Shell -->
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg>
+      Outbuild
+    </div>
+    <div class="breadcrumb">
+      <span>Projects</span>
+      <span class="sep">/</span>
+      <span>2026 Builder Street</span>
+      <span class="sep">/</span>
+      <div class="bc-project">
+        <button class="bc-btn" id="bcBtn" onclick="toggleDropdown()">
+          <span id="scheduleLabel">Schedule</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="bc-dropdown" id="bcDropdown">
+          <div class="dd-item">Schedule v1</div>
+          <div class="dd-item">Schedule v2</div>
+          <div class="dd-item new" onclick="openModal()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            New Schedule
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-content">
+    <div class="gantt">
+      <div class="gantt-hdr">
+        <div class="gantt-hdr-name">ACTIVITY NAME</div>
+        <div class="gantt-months">
+          <div class="gantt-mo">APR 29</div><div class="gantt-mo">MAY 29</div>
+          <div class="gantt-mo">JUN 29</div><div class="gantt-mo">JUL 29</div>
+          <div class="gantt-mo">AUG 29</div><div class="gantt-mo">SEP 29</div>
+        </div>
+      </div>
+      <div id="ganttRows"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Scrim + Modal -->
+<div class="scrim" id="scrim" onclick="handleScrimClick(event)">
+<div class="modal" id="modal">
+
+  <!-- Modal Header -->
+  <div class="modal-hdr">
+    <div class="hdr-brand">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg>
+      <span class="brand-label"><strong>Outbuild AI</strong> · Schedule Generator Agent</span>
+    </div>
+    <div class="hdr-stepper" id="stepper"></div>
+    <div class="hdr-close">
+      <button class="btn-close" onclick="closeModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal Body -->
+  <div class="modal-body">
+
+    <!-- Left: Chat -->
+    <div class="chat-panel">
+      <div class="chat-thread" id="chatThread">
+        <div class="chat-bubble">
+          <div class="avatar"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg></div>
+          <div class="bubble-body">I'm your <strong>Schedule Generator Agent</strong> — I'll turn your project details into a full activity schedule. I've pre-loaded some basics from your settings on the right. Review them, adjust anything that's off, and we'll work through the rest together.</div>
+        </div>
+        <div class="chat-bubble">
+          <div class="avatar"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg></div>
+          <div class="bubble-body">Or tell me in your own words — the more context I have, the better I can plan.</div>
+        </div>
+      </div>
+      <div class="composer">
+        <input type="text" class="composer-input" id="composerInput" placeholder="Ask or override anything…">
+        <button class="btn-send empty" id="sendBtn" onclick="sendMsg()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Options / Preview -->
+    <div class="right-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabOpts" onclick="switchTab('opts')">Options</button>
+        <button class="tab-btn" id="tabPrev" onclick="switchTab('prev')">Preview</button>
+        <div class="tab-badge">35 activities · 27mo</div>
+      </div>
+
+      <!-- OPTIONS PANE -->
+      <div class="tab-pane" id="paneOpts">
+
+        <!-- 1 · Project Basics -->
+        <div id="anch-basics">
+          <div class="sec-head">Project Basics</div>
+          <div class="sec-card">
+          <div class="tile-grid">
+            <div class="tile">
+              <div class="tile-lbl">Type</div>
+              <div class="tile-val"><select><option>Multifamily</option><option>Commercial</option><option>Mixed-use</option></select></div>
+            </div>
+            <div class="tile">
+              <div class="tile-lbl">Floors</div>
+              <div class="tile-val">12</div>
+            </div>
+            <div class="tile">
+              <div class="tile-lbl">Below Grade</div>
+              <div class="tile-val">2</div>
+            </div>
+            <div class="tile">
+              <div class="tile-lbl">Buildings</div>
+              <div class="tile-val">1</div>
+            </div>
+            <div class="tile span2">
+              <div class="tile-lbl">Timeline</div>
+              <div class="tile-val">07/01/26 → <span class="amber">TBD</span></div>
+            </div>
+            <div class="tile span3">
+              <div class="tile-lbl">Delivery</div>
+              <div class="tile-val"><select><option>New Build</option><option>Renovation</option><option>Adaptive Reuse</option></select></div>
+            </div>
+          </div>
+
+          <div class="sec-block">
+            <div>
+              <div class="field-lbl">Plan around</div>
+              <div class="chips-wrap" id="chipsWrap">
+                <span class="chip" data-l="Phased handover" onclick="toggleChip(this)">Phased handover</span>
+                <span class="chip" data-l="Unit count TBD" onclick="toggleChip(this)">Unit count TBD</span>
+                <span class="chip" data-l="Affordable units" onclick="toggleChip(this)">Affordable units</span>
+                <span class="chip" data-l="Tight site" onclick="toggleChip(this)">Tight site</span>
+                <span class="chip" data-l="Fast-track" onclick="toggleChip(this)">Fast-track</span>
+                <span class="chip" data-l="LEED required" onclick="toggleChip(this)">LEED required</span>
+                <span class="chip" data-l="Hard deadline" onclick="toggleChip(this)">Hard deadline</span>
+                <span class="chip" data-l="Union labor" onclick="toggleChip(this)">Union labor</span>
+                <span class="chip" data-l="Weather window" onclick="toggleChip(this)">Weather window</span>
+                <span class="chip" data-l="Prevailing wage" onclick="toggleChip(this)">Prevailing wage</span>
+                <span class="chip" data-l="Multiple GCs" onclick="toggleChip(this)">Multiple GCs</span>
+                <span class="chip" data-l="Owner-furnished equipment" onclick="toggleChip(this)">Owner-furnished equipment</span>
+                <span class="chip" data-l="Complex logistics" onclick="toggleChip(this)">Complex logistics</span>
+                <span class="chip" data-l="Owner-controlled insurance" onclick="toggleChip(this)">Owner-controlled insurance</span>
+              </div>
+            </div>
+            <div>
+              <div class="field-lbl">Notes <span class="opt-tag">Optional</span></div>
+              <textarea class="opt-textarea" placeholder="e.g., owner wants units 1–50 done by Q3, staging from the south lot…"></textarea>
+            </div>
+          </div>
+          </div><!-- /sec-card -->
+        </div>
+
+        <!-- 2 · Systems -->
+        <div id="anch-systems">
+          <div class="sec-head">Systems</div>
+          <div class="sec-card" style="padding: 8px;">
+          <div class="acc-list">
+
+            <div class="acc" id="acc-struct">
+              <div class="acc-hdr" onclick="toggleAcc('acc-struct')">
+                <span class="acc-title">Structural System</span>
+                <span class="acc-sel-all" onclick="event.stopPropagation();selAll('acc-struct')">Select all</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="CIP Concrete" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>CIP Concrete</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Drilled Piers" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Drilled Piers</label>
+                  <label class="cb-item"><div class="custom-cb on" data-l="Steel Frame" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Steel Frame</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Wood Frame" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Wood Frame</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Masonry" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Masonry</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-found">
+              <div class="acc-hdr" onclick="toggleAcc('acc-found')">
+                <span class="acc-title">Foundation System</span>
+                <div class="acc-badge">1</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Mat slab" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Mat slab</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Spread footings" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Spread footings</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Drilled piers" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Drilled piers</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Pile caps" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Pile caps</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-pfacade">
+              <div class="acc-hdr" onclick="toggleAcc('acc-pfacade')">
+                <span class="acc-title">Primary Facade</span>
+                <div class="acc-badge">1</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Curtain wall" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Curtain wall</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Punched windows" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Punched windows</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Brick veneer" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Brick veneer</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Metal panel" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Metal panel</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-sfacade">
+              <div class="acc-hdr" onclick="toggleAcc('acc-sfacade')">
+                <span class="acc-title">Secondary Facade</span>
+                <div class="acc-badge">1</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Stucco" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Stucco</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="EIFS" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>EIFS</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Fiber-cement" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Fiber-cement</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-roof">
+              <div class="acc-hdr" onclick="toggleAcc('acc-roof')">
+                <span class="acc-title">Roof System</span>
+                <div class="acc-badge">1</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Low-slope TPO" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Low-slope TPO</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Modified bitumen" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Modified bitumen</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Standing seam" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Standing seam</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-elev">
+              <div class="acc-hdr" onclick="toggleAcc('acc-elev')">
+                <span class="acc-title">Elevators</span>
+                <div class="acc-badge">1</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Traction — 4 cabs" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Traction — 4 cabs</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Hydraulic" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Hydraulic</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Service freight" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Service freight</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div><!-- /sec-card -->
+        </div>
+
+        <!-- 3 · Complexity -->
+        <div id="anch-complexity">
+          <div class="sec-head">Complexity</div>
+          <div class="sec-card" style="padding: 8px;">
+          <div class="acc-list">
+
+            <div class="acc" id="acc-mep">
+              <div class="acc-hdr" onclick="toggleAcc('acc-mep')">
+                <span class="acc-title">MEP Complexity</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div style="margin-bottom:13px;">
+                  <div class="field-lbl">HVAC System</div>
+                  <select class="s-select"><option>VRF / VRV</option><option>VAV</option><option>Fan coil units</option><option>Chilled beam</option></select>
+                </div>
+                <div class="field-lbl">Electrical Features</div>
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb" data-l="Switchgear >2000A" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Switchgear >2000A</label>
+                  <label class="cb-item"><div class="custom-cb on" data-l="Emergency Generator" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Emergency Generator</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="UPS / Battery System" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>UPS / Battery System</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Solar / PV" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Solar / PV</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-longlead">
+              <div class="acc-hdr" onclick="toggleAcc('acc-longlead')">
+                <span class="acc-title">Long-Lead Items</span>
+                <div class="acc-badge">3</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Elevators (26w)" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Elevators (26w)</label>
+                  <label class="cb-item"><div class="custom-cb on" data-l="Switchgear (20w)" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Switchgear (20w)</label>
+                  <label class="cb-item"><div class="custom-cb on" data-l="Curtain wall (18w)" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Curtain wall (18w)</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-special">
+              <div class="acc-hdr" onclick="toggleAcc('acc-special')">
+                <span class="acc-title">Special Scopes</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb" data-l="Pool / spa" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Pool / spa</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Green roof" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Green roof</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Helipad" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Helipad</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="acc" id="acc-site">
+              <div class="acc-hdr" onclick="toggleAcc('acc-site')">
+                <span class="acc-title">Site Scope</span>
+                <div class="acc-badge">2</div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </div>
+              <div class="acc-body">
+                <div class="cb-grid">
+                  <label class="cb-item"><div class="custom-cb on" data-l="Surface parking" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Surface parking</label>
+                  <label class="cb-item"><div class="custom-cb on" data-l="Landscaping" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Landscaping</label>
+                  <label class="cb-item"><div class="custom-cb" data-l="Hardscape plaza" onclick="toggleCb(this)"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg></div>Hardscape plaza</label>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          </div><!-- /sec-card -->
+        </div>
+
+        <!-- 4 · Spatial -->
+        <div id="anch-spatial">
+          <div class="sec-head">Spatial</div>
+          <div class="sec-card">
+          <div class="sec-block">
+            <div class="spatial-2col">
+              <div>
+                <div class="field-lbl">Floor Naming</div>
+                <select class="s-select"><option>Level 1, Level 2…</option><option>Floor 1, Floor 2…</option><option>1st, 2nd, 3rd…</option></select>
+              </div>
+              <div>
+                <div class="field-lbl">Zones per Floor</div>
+                <input type="number" class="n-input" id="zoneCount" value="2" min="1" max="8" oninput="updateFloors()">
+              </div>
+            </div>
+
+            <div>
+              <div class="field-lbl">Zone Naming</div>
+              <div class="seg">
+                <button class="seg-btn on" data-z="Wing" onclick="setZone(this,'Wing')">Wing 1 / Wing 2</button>
+                <button class="seg-btn" data-z="Zone" onclick="setZone(this,'Zone')">Zone A / Zone B</button>
+                <button class="seg-btn" data-z="Compass" onclick="setZone(this,'Compass')">North / South</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="field-lbl">Preview — Floors &amp; Zones</div>
+              <div class="floors-tbl" id="floorsTbl"></div>
+            </div>
+
+            <div>
+              <div class="field-lbl">Add any context not covered above… <span class="opt-tag">Optional</span></div>
+              <textarea class="opt-textarea" placeholder="Setbacks, split levels, shared cores…"></textarea>
+            </div>
+          </div>
+          </div><!-- /sec-card -->
+        </div>
+
+        <!-- 5 · Review placeholder -->
+        <div id="anch-review" style="height:32px;"></div>
+
+      </div><!-- /paneOpts -->
+
+      <!-- PREVIEW PANE -->
+      <div class="tab-pane hidden" id="panePrev" style="padding:0; background:#fff;">
+
+        <!-- Schedule Summary — shown only on Review step -->
+        <div class="sched-summary hidden" id="prevSummary">
+
+          <div class="ss-topbar">
+            <span class="ss-title">Schedule Summary</span>
+            <div class="ss-badge">
+              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg>
+              Ready to generate
+            </div>
+          </div>
+
+          <div class="ss-stats">
+            <div class="ss-stat">
+              <div class="ss-stat-val">35</div>
+              <div class="ss-stat-lbl">Activities</div>
+            </div>
+            <div class="ss-stat">
+              <div class="ss-stat-val">14</div>
+              <div class="ss-stat-lbl">Floors (12 + 2 BG)</div>
+            </div>
+            <div class="ss-stat">
+              <div class="ss-stat-val">27<span style="font-size:14px;font-weight:600;color:var(--muted-light)">mo</span></div>
+              <div class="ss-stat-lbl">Est. Duration</div>
+            </div>
+            <div class="ss-stat">
+              <div class="ss-stat-val">2</div>
+              <div class="ss-stat-lbl">Zones / Floor</div>
+            </div>
+          </div>
+
+          <div class="ss-details">
+            <div class="ss-dk">Type</div>
+            <div class="ss-dv"><span class="ss-pill green">Multifamily</span><span class="ss-sep">·</span>12 floors<span class="ss-sep">·</span>2 below grade</div>
+            <div class="ss-dk">Structure</div>
+            <div class="ss-dv"><span class="ss-pill">CIP Concrete</span><span class="ss-pill">Steel Frame</span></div>
+            <div class="ss-dk">MEP</div>
+            <div class="ss-dv"><span class="ss-pill">VRF / VRV</span><span class="ss-pill">Emergency Generator</span></div>
+            <div class="ss-dk">Long-lead</div>
+            <div class="ss-dv">Elevators <span class="ss-pill">26w</span><span class="ss-sep">·</span>Switchgear <span class="ss-pill">20w</span><span class="ss-sep">·</span>Curtain wall <span class="ss-pill">18w</span></div>
+            <div class="ss-dk">Layout</div>
+            <div class="ss-dv">Wing 1 / Wing 2<span class="ss-sep">·</span>2 zones per floor</div>
+            <div class="ss-dk">Timeline</div>
+            <div class="ss-dv">07/01/26 → <span class="ss-pill amber">TBD</span></div>
+          </div>
+
+          <div class="ss-phases">
+            <div class="ss-phases-title">Phase Breakdown</div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Preconstruction</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:11%;background:#a5b4fc;"></div></div>
+              <span class="ss-phase-dur">155d</span>
+            </div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Foundation</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:15%;background:#c4a882;"></div></div>
+              <span class="ss-phase-dur">210d</span>
+            </div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Structure</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:100%;background:#7dd3fc;"></div></div>
+              <span class="ss-phase-dur">690d</span>
+            </div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Envelope</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:72%;background:#5eead4;"></div></div>
+              <span class="ss-phase-dur">495d</span>
+            </div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Systems — MEP</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:87%;background:#c4b5fd;"></div></div>
+              <span class="ss-phase-dur">600d</span>
+            </div>
+            <div class="ss-phase-row">
+              <span class="ss-phase-name">Interior Finishes</span>
+              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:51%;background:#6ee7b7;"></div></div>
+              <span class="ss-phase-dur">355d</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Activity list -->
+        <div id="activityList" style="padding:0 0 24px;">
+          <div class="prev-col-hdr">
+            <span class="prev-col-act">Activity</span>
+            <span class="prev-col-dur">Duration</span>
+          </div>
+
+          <div class="wbs-group" data-group="Preconstruction">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Preconstruction</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Site mobilization</span><span class="act-dur">30d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Permits &amp; approvals</span><span class="act-dur">60d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Utility coordination</span><span class="act-dur">45d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Survey &amp; staking</span><span class="act-dur">20d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+
+          <div class="wbs-group" data-group="Foundation">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Foundation</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Mass excavation</span><span class="act-dur">45d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Shoring &amp; excavation</span><span class="act-dur">30d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Drilled piers / caissons</span><span class="act-dur">21d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Mat slab pour</span><span class="act-dur">30d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Underground plumbing</span><span class="act-dur">25d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Waterproofing</span><span class="act-dur">20d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+
+          <div class="wbs-group" data-group="Structure">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Structure</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">CIP Concrete Frame</span><span class="act-dur">90d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Structural Steel Frame</span><span class="act-dur">45d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Stair &amp; shear walls</span><span class="act-dur">120d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Slab pours — levels 1–12</span><span class="act-dur">180d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Post-tensioning</span><span class="act-dur">90d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+
+          <div class="wbs-group" data-group="Envelope">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Envelope</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Low-Slope Roofing / Waterproofing</span><span class="act-dur">21d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Curtain Wall System</span><span class="act-dur">60d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Punched Windows</span><span class="act-dur">14d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Exterior framing</span><span class="act-dur">120d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+
+          <div class="wbs-group" data-group="Systems">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Systems</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">HVAC – VRF / VRV</span><span class="act-dur">30d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">MEP Rough-in</span><span class="act-dur">45d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Plumbing Rough-in</span><span class="act-dur">30d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Electrical</span><span class="act-dur">90d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Fire protection</span><span class="act-dur">75d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Emergency generator</span><span class="act-dur">120d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Elevators</span><span class="act-dur">90d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+
+          <div class="wbs-group" data-group="Interior Finishes">
+            <div class="wbs-group-hdr" onclick="toggleGroup(this)">
+              <span class="wbs-group-chev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="wbs-group-name">Interior Finishes</span>
+            </div>
+            <div class="wbs-group-body">
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Drywall</span><span class="act-dur">90d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Paint</span><span class="act-dur">60d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Flooring</span><span class="act-dur">45d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Cabinetry</span><span class="act-dur">40d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Lobby &amp; amenity</span><span class="act-dur">60d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+              <div class="act-row" draggable="true"><span class="act-handle">⠿</span><span class="act-name">Final cleaning</span><span class="act-dur">10d</span><button class="act-remove" onclick="removeRow(this)">×</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:none"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#6366f1;"></div>
+            <span class="wbs-title">Preconstruction</span>
+            <div class="wbs-meta"><span class="wbs-count">4 activities</span><span class="wbs-dur">155d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:18%;background:#c7d2fe;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row">
+              <span class="act-flag-dot"></span>
+              <span class="act-name">Site mobilization</span>
+              <div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">30d</span></div>
+              <div class="act-actions">
+                <button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
+              </div>
+            </div>
+            <div class="act-row">
+              <span class="act-flag-dot"></span>
+              <span class="act-name">Permits &amp; approvals</span>
+              <div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">60d</span></div>
+              <div class="act-actions">
+                <button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
+              </div>
+            </div>
+            <div class="act-row">
+              <span class="act-flag-dot"></span>
+              <span class="act-name">Utility coordination</span>
+              <div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">45d</span></div>
+              <div class="act-actions">
+                <button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
+              </div>
+            </div>
+            <div class="act-row">
+              <span class="act-flag-dot"></span>
+              <span class="act-name">Survey &amp; staking</span>
+              <div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:33%"></div></div><span class="act-dur">20d</span></div>
+              <div class="act-actions">
+                <button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+
+        <div class="wbs-card open-card"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#92400e;"></div>
+            <span class="wbs-title">Foundation</span>
+            <div class="wbs-meta"><span class="wbs-count">6 activities</span><span class="wbs-dur">210d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:25%;background:#d6b99a;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Mass excavation</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">45d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Drilled piers</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Pile caps &amp; grade beams</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">30d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Mat slab pour</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">30d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Underground plumbing</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:42%"></div></div><span class="act-dur">25d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Waterproofing</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:33%"></div></div><span class="act-dur">20d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+          </div>
+        </div></div>
+
+        <div class="wbs-card open-card"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#0284c7;"></div>
+            <span class="wbs-title">Structure</span>
+            <div class="wbs-meta"><span class="wbs-count">5 activities</span><span class="wbs-dur">690d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:82%;background:#93c5fd;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">CIP concrete frame</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">240d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Stair &amp; shear walls</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">120d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Slab pours — levels 1–12</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">180d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Post-tensioning</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:37%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Slab edge &amp; lintels</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:25%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+          </div>
+        </div></div>
+
+        <div class="wbs-card open-card"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#0d9488;"></div>
+            <span class="wbs-title">Envelope</span>
+            <div class="wbs-meta"><span class="wbs-count">5 activities</span><span class="wbs-dur">495d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:59%;background:#99f6e4;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Exterior framing</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:67%"></div></div><span class="act-dur">120d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row flagged"><span class="act-flag-dot"></span><span class="act-name">Curtain wall system</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">180d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Punched windows</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Roofing</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:33%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Caulking</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:25%"></div></div><span class="act-dur">45d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+          </div>
+        </div></div>
+
+        <div class="wbs-card open-card"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#7c3aed;"></div>
+            <span class="wbs-title">Systems — MEP</span>
+            <div class="wbs-meta"><span class="wbs-count">7 activities</span><span class="wbs-dur">600d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:71%;background:#ddd6fe;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">HVAC rough-in</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Plumbing</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:62%"></div></div><span class="act-dur">75d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Electrical</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Fire protection</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:62%"></div></div><span class="act-dur">75d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row flagged"><span class="act-flag-dot"></span><span class="act-name">Emergency generator</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">120d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Switchgear</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Elevators</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:75%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+          </div>
+        </div></div>
+
+        <div class="wbs-card open-card"><div class="wbs open">
+          <div class="wbs-hdr" onclick="toggleWbs(this)">
+            <svg class="wbs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            <div class="wbs-cat-dot" style="background:#059669;"></div>
+            <span class="wbs-title">Interior Finishes</span>
+            <div class="wbs-meta"><span class="wbs-count">8 activities</span><span class="wbs-dur">355d total</span></div>
+          </div>
+          <div class="dur-bar-track"><div class="dur-bar-fill" style="width:42%;background:#a7f3d0;"></div></div>
+          <div class="wbs-body">
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Drywall</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:100%"></div></div><span class="act-dur">90d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Paint</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:67%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Flooring</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:50%"></div></div><span class="act-dur">45d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Cabinetry</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:44%"></div></div><span class="act-dur">40d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Appliances</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:22%"></div></div><span class="act-dur">20d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Lobby &amp; amenity</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:67%"></div></div><span class="act-dur">60d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Corridors</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:33%"></div></div><span class="act-dur">30d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+            <div class="act-row"><span class="act-flag-dot"></span><span class="act-name">Final cleaning</span><div class="act-dur-wrap"><div class="act-dur-bar"><div class="act-dur-bar-fill" style="width:11%"></div></div><span class="act-dur">10d</span></div><div class="act-actions"><button class="act-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="act-btn del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg></button></div></div>
+          </div>
+        </div></div>
+
+      </div><!-- /panePrev -->
+    </div><!-- /right-panel -->
+  </div><!-- /modal-body -->
+
+  <!-- Footer -->
+  <div class="modal-ftr">
+    <div class="ftr-proj">
+      <div class="ftr-name">Test</div>
+      <div class="ftr-addr">2026 Builder Street</div>
+    </div>
+    <div class="ftr-right">
+      <div class="step-ctr"><strong id="stepNum">1</strong> of 5</div>
+      <button class="btn-next" id="btnNext" onclick="nextStep()">
+        Next
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div><!-- /modal -->
+</div><!-- /scrim -->
+
+<!-- CoBuilder Dock -->
+<div class="dock" id="dock">
+  <div class="dock-icon"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg></div>
+  <div class="dock-text">
+    <div class="dock-title">CoBuilder Agent</div>
+    <div class="dock-sub">Ready to assist with your schedule</div>
+  </div>
+  <button class="dock-x" onclick="document.getElementById('dock').classList.remove('up')">×</button>
+</div>
+
+<script>
+let step = 1;
+let zoneMode = 'Wing';
+let zoneDebounce = null;
+const STEPS = ['Project Basics','Systems','Complexity','Spatial','Review'];
+const ANCHORS = ['anch-basics','anch-systems','anch-complexity','anch-spatial','anch-review'];
+
+const SPARK_SVG = `<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg>`;
+const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>`;
+
+// ── Gantt ──
+(function buildGantt(){
+  const data = [
+    ['Site mobilization',2,18],['Permits & approvals',5,22],['Mass excavation',10,28],
+    ['Drilled piers',15,25],['CIP concrete frame',20,55],['Structural steel',25,40],
+    ['Curtain wall',35,65],['MEP rough-in',40,50],['Interior finishes',55,35],['Landscaping',70,20]
+  ];
+  const c = document.getElementById('ganttRows');
+  data.forEach(([n,l,w]) => {
+    const r = document.createElement('div'); r.className = 'gantt-row';
+    r.innerHTML = `<div class="gantt-name">${n}</div><div class="gantt-bars"><div class="gantt-bar" style="left:${l}%;width:${w}%"></div></div>`;
+    c.appendChild(r);
+  });
+})();
+
+// ── Dropdown ──
+function toggleDropdown(){
+  document.getElementById('bcDropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.bc-project')) document.getElementById('bcDropdown').classList.remove('open');
+});
+
+// ── Modal ──
+function openModal(){
+  document.getElementById('bcDropdown').classList.remove('open');
+  resetModal();
+  document.getElementById('scrim').classList.add('open');
+}
+function closeModal(){ document.getElementById('scrim').classList.remove('open'); }
+function handleScrimClick(e){ if (e.target.id === 'scrim') closeModal(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function resetModal(){
+  step = 1;
+  renderStepper(); updateFooter();
+  switchTab('opts');
+  document.getElementById('paneOpts').scrollTop = 0;
+  document.getElementById('panePrev').scrollTop = 0;
+  document.getElementById('prevSummary').classList.add('hidden');
+  const t = document.getElementById('chatThread');
+  t.innerHTML = `
+    <div class="chat-bubble">
+      <div class="avatar">${SPARK_SVG}</div>
+      <div class="bubble-body">I'm your <strong>Schedule Generator Agent</strong> — I'll turn your project details into a full activity schedule. I've pre-loaded some basics from your settings on the right. Review them, adjust anything that's off, and we'll work through the rest together.</div>
+    </div>
+    <div class="chat-bubble">
+      <div class="avatar">${SPARK_SVG}</div>
+      <div class="bubble-body">Or tell me in your own words — the more context I have, the better I can plan.</div>
+    </div>`;
+  setSendState(false);
+}
+
+// ── Stepper ──
+function renderStepper(){
+  const c = document.getElementById('stepper'); c.innerHTML = '';
+  STEPS.forEach((label, i) => {
+    const s = i + 1;
+    const state = s < step ? 'done' : s === step ? 'active' : 'inactive';
+    const circ = state === 'done'
+      ? `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>`
+      : s;
+    const el = document.createElement('div');
+    el.className = 'step-item'; el.dataset.state = state;
+    el.onclick = () => jumpTo(s);
+    el.innerHTML = `<div class="step-inner"><div class="step-circle">${circ}</div><span class="step-label">${label}</span></div>`;
+    c.appendChild(el);
+    if (i < STEPS.length - 1) {
+      const ln = document.createElement('div');
+      ln.className = 'step-line' + (s < step ? ' done' : '');
+      c.appendChild(ln);
+    }
+  });
+}
+
+function jumpTo(n){
+  step = n;
+  renderStepper(); updateFooter();
+  if (n === 5){
+    switchTab('prev');
+    document.getElementById('prevSummary').classList.remove('hidden');
+    document.getElementById('panePrev').scrollTop = 0;
+  } else {
+    document.getElementById('prevSummary').classList.add('hidden');
+    switchTab('opts');
+    const anchor = document.getElementById(ANCHORS[n - 1]);
+    const pane = document.getElementById('paneOpts');
+    if (anchor && pane) pane.scrollTo({ top: Math.max(0, anchor.offsetTop - 16), behavior: 'smooth' });
+  }
+}
+
+function nextStep(){
+  if (step < 5) { jumpTo(step + 1); }
+  else {
+    closeModal();
+    document.getElementById('scheduleLabel').textContent = '2026 Builder Street — Multifamily';
+    setTimeout(() => document.getElementById('dock').classList.add('up'), 280);
+  }
+}
+
+function updateFooter(){
+  document.getElementById('stepNum').textContent = step;
+  const btn = document.getElementById('btnNext');
+  if (step === 5){
+    btn.classList.add('confirm');
+    btn.innerHTML = 'Confirm &amp; generate <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>';
+  } else {
+    btn.classList.remove('confirm');
+    btn.innerHTML = 'Next <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>';
+  }
+}
+
+// ── Tabs ──
+function switchTab(t){
+  document.getElementById('tabOpts').classList.toggle('active', t === 'opts');
+  document.getElementById('tabPrev').classList.toggle('active', t === 'prev');
+  document.getElementById('paneOpts').classList.toggle('hidden', t !== 'opts');
+  document.getElementById('panePrev').classList.toggle('hidden', t !== 'prev');
+}
+
+// ── Accordion ──
+function toggleAcc(id){ document.getElementById(id).classList.toggle('open'); }
+function selAll(id){
+  const acc = document.getElementById(id);
+  const unchecked = acc.querySelectorAll('.custom-cb:not(.on)');
+  if (!unchecked.length) return;
+  unchecked.forEach(cb => cb.classList.add('on'));
+  const title = acc.querySelector('.acc-title').textContent.trim();
+  pushSystem(`Selected all options under <strong>${title}</strong>. Preview updated.`);
+}
+
+// ── Accordion category helper ──
+function getAccCategory(el){
+  const acc = el.closest('.acc');
+  return acc ? acc.querySelector('.acc-title')?.textContent.trim() : null;
+}
+
+// ── Checkbox ──
+function toggleCb(el){
+  const was = el.classList.contains('on');
+  el.classList.toggle('on');
+  const cat = getAccCategory(el);
+  const action = was ? 'Removed' : 'Added';
+  const msg = cat
+    ? `${action} <strong>${el.dataset.l}</strong> under ${cat}. Preview updated.`
+    : `${action} <strong>${el.dataset.l}</strong>. Preview updated.`;
+  pushSystem(msg);
+}
+
+// ── Chips ──
+function toggleChip(el){
+  const was = el.classList.contains('on');
+  el.classList.toggle('on');
+  const action = was ? 'Removed' : 'Added';
+  const msg = was
+    ? `Removed <strong>${el.dataset.l}</strong> from plan-around constraints.`
+    : `Added <strong>${el.dataset.l}</strong> as a plan-around constraint. Preview updated.`;
+  pushSystem(msg);
+}
+
+// ── Zone naming ──
+function setZone(btn, mode){
+  zoneMode = mode;
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  updateFloors();
+  const labels = { Wing:'Wing 1 / Wing 2', Zone:'Zone A / Zone B', Compass:'North / South' };
+  pushSystem(`Zone naming switched to <strong>${labels[mode]}</strong>. Floor layout in Preview updated.`);
+}
+
+// ── Floors table ──
+function getZones(n){
+  const sets = {
+    Wing: ['Wing 1','Wing 2','Wing 3','Wing 4','Wing 5','Wing 6','Wing 7','Wing 8'],
+    Zone: ['Zone A','Zone B','Zone C','Zone D','Zone E','Zone F','Zone G','Zone H'],
+    Compass: ['North','South','East','West','NE','NW','SE','SW']
+  };
+  return sets[zoneMode].slice(0, n);
+}
+
+function updateFloors(){
+  const raw = document.getElementById('zoneCount').value;
+  const n = Math.max(1, Math.min(8, parseInt(raw) || 0));
+  const levels = ['B2','B1','Level 1','Level 2','Level 3','Level 4','Level 5','Level 6','Level 7','Level 8','Level 9','Level 10','Level 11','Level 12'];
+
+  // Empty / null state
+  if (!raw || n === 0) {
+    document.getElementById('floorsTbl').innerHTML =
+      `<div class="ft-empty">Enter a zone count to preview the floor layout.</div>`;
+    return;
+  }
+
+  const zones = getZones(n).join(', ');
+  document.getElementById('floorsTbl').innerHTML =
+    levels.map(l => `<div class="ft-row"><span class="ft-name">${l}</span><span class="ft-zones">— ${zones}</span></div>`).join('');
+
+  // Debounced chat notification for zone count changes
+  clearTimeout(zoneDebounce);
+  zoneDebounce = setTimeout(() => {
+    pushSystem(`Updated to <strong>${n} zone${n > 1 ? 's' : ''} per floor</strong>. Floor layout in Preview updated.`);
+  }, 800);
+}
+
+// ── Chat helpers ──
+const AI_AVATAR = `<div class="avatar">${SPARK_SVG}</div>`;
+
+function pushBubble(html, user = false){
+  const t = document.getElementById('chatThread');
+  const b = document.createElement('div');
+  b.className = 'chat-bubble' + (user ? ' user' : '');
+  b.innerHTML = user
+    ? `<div class="bubble-body">${html}</div>`
+    : `${AI_AVATAR}<div class="bubble-body">${html}</div>`;
+  t.appendChild(b);
+  scrollChat();
+}
+
+function pushSystem(html){
+  const t = document.getElementById('chatThread');
+  const b = document.createElement('div');
+  b.className = 'chat-bubble system';
+  b.innerHTML = `<div class="sys-bubble">${CHECK_SVG}<span>${html}</span></div>`;
+  t.appendChild(b);
+  scrollChat();
+}
+
+function scrollChat(){
+  const t = document.getElementById('chatThread');
+  t.scrollTo({ top: t.scrollHeight, behavior: 'smooth' });
+}
+
+function showTyping(){
+  hideTyping();
+  const t = document.getElementById('chatThread');
+  const b = document.createElement('div');
+  b.id = 'typing-ind'; b.className = 'chat-bubble typing-bubble';
+  b.innerHTML = `${AI_AVATAR}<div class="bubble-body"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+  t.appendChild(b);
+  scrollChat();
+}
+
+function hideTyping(){
+  document.getElementById('typing-ind')?.remove();
+}
+
+// ── Contextual AI replies ──
+const REPLY_RULES = [
+  { words: ['floor','floors','level','levels','story','stories'],
+    reply: msg => `Got it — I've noted that and updated the floor configuration in your <strong>Preview</strong>.` },
+  { words: ['concrete','steel','structure','structural','frame','framing'],
+    reply: msg => `Noted. I've adjusted the structural scope in your <strong>Preview</strong> to reflect that.` },
+  { words: ['mep','hvac','plumbing','electrical','mechanical'],
+    reply: msg => `Good context. I've updated the MEP scope in your <strong>Preview</strong> based on that.` },
+  { words: ['elevator','curtain wall','switchgear','long lead','long-lead','procurement'],
+    reply: msg => `Logged — long-lead items in the <strong>Preview</strong> have been updated to reflect that.` },
+  { words: ['deadline','date','timeline','schedule','phased','fast-track'],
+    reply: msg => `Got it — I've flagged that scheduling constraint and it's reflected in your <strong>Preview</strong>.` },
+  { words: ['zone','wing','north','south','east','west'],
+    reply: msg => `Understood. I've updated the spatial breakdown in your <strong>Preview</strong> to match.` },
+  { words: ['site','parking','access','logistics','staging'],
+    reply: msg => `Noted the site condition. I've updated the <strong>Preview</strong> to account for that.` },
+  { words: ['leed','green','certification','sustainability'],
+    reply: msg => `Got it — I've added the sustainability requirements to your <strong>Preview</strong>.` },
+];
+
+function getReply(text){
+  const lower = text.toLowerCase();
+  for (const rule of REPLY_RULES) {
+    if (rule.words.some(w => lower.includes(w))) return rule.reply(text);
+  }
+  return `Got it — I've noted that and reflected it in your <strong>Preview</strong>.`;
+}
+
+// ── Composer ──
+function setSendState(hasText){
+  const btn = document.getElementById('sendBtn');
+  btn.classList.toggle('empty', !hasText);
+}
+
+function sendMsg(){
+  const inp = document.getElementById('composerInput');
+  const txt = inp.value.trim();
+
+  // Empty state — shake and bail
+  if (!txt) {
+    inp.classList.add('shake');
+    inp.addEventListener('animationend', () => inp.classList.remove('shake'), { once: true });
+    return;
+  }
+
+  inp.value = '';
+  setSendState(false);
+  pushBubble(txt, true);
+  showTyping();
+  const delay = 600 + Math.random() * 400;
+  setTimeout(() => { hideTyping(); pushBubble(getReply(txt)); }, delay);
+}
+
+document.getElementById('composerInput').addEventListener('input', e => {
+  setSendState(!!e.target.value.trim());
+});
+document.getElementById('composerInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMsg();
+});
+
+// ── Group collapse ──
+function toggleGroup(hdr){
+  hdr.closest('.wbs-group').classList.toggle('collapsed');
+}
+
+// ── Remove row ──
+function removeRow(btn){
+  const row = btn.closest('.act-row');
+  row.classList.add('removing');
+  row.addEventListener('animationend', () => row.remove(), { once: true });
+  pushSystem(`Removed <strong>${row.querySelector('.act-name').textContent.trim()}</strong> from the schedule.`);
+}
+
+// ── Drag and Drop ──
+let dragSrc = null;
+
+document.addEventListener('dragstart', e => {
+  const row = e.target.closest('.act-row');
+  if (!row) return;
+  dragSrc = row;
+  row.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', '');
+});
+
+document.addEventListener('dragend', () => {
+  if (dragSrc) dragSrc.classList.remove('dragging');
+  document.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(el => {
+    el.classList.remove('drag-over-top', 'drag-over-bot');
+  });
+  dragSrc = null;
+});
+
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  const row = e.target.closest('.act-row');
+  document.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(el => {
+    el.classList.remove('drag-over-top', 'drag-over-bot');
+  });
+  if (!row || row === dragSrc) return;
+  const rect = row.getBoundingClientRect();
+  const mid = rect.top + rect.height / 2;
+  row.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bot');
+});
+
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const target = document.querySelector('.drag-over-top, .drag-over-bot');
+  if (!target || !dragSrc || target === dragSrc) return;
+  const isTop = target.classList.contains('drag-over-top');
+  target.classList.remove('drag-over-top', 'drag-over-bot');
+  target.parentNode.insertBefore(dragSrc, isTop ? target : target.nextSibling);
+});
+
+// ── Init ──
+updateFloors();
+
+// Add empty-state style for floors table
+const style = document.createElement('style');
+style.textContent = `.ft-empty { padding: 16px 14px; font-size: 12.5px; color: var(--muted-light); font-style: italic; text-align: center; }`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>

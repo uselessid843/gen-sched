@@ -250,12 +250,13 @@ body {
 .btn-send svg { width: 15px; height: 15px; }
 
 /* ─── Right Panel ─── */
-.right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f7f8fa; }
+.right-panel { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: #f7f8fa; min-height: 0; }
 
 .tab-bar {
   height: 44px; flex-shrink: 0; border-bottom: 1px solid var(--border);
   display: flex; align-items: stretch; padding: 0 20px;
   background: #fff;
+  position: sticky; top: 0; z-index: 10;
 }
 .tab-btn {
   background: none; border: none; border-bottom: 2.5px solid transparent;
@@ -276,7 +277,7 @@ body {
 }
 
 .tab-pane {
-  flex: 1; overflow-y: auto; padding: 16px 16px 24px;
+  flex: 1; padding: 16px 16px 24px;
   display: flex; flex-direction: column; gap: 8px;
   background: #f7f8fa;
 }
@@ -1141,7 +1142,7 @@ body {
       </div><!-- /paneOpts -->
 
       <!-- PREVIEW PANE -->
-      <div class="tab-pane hidden" id="panePrev" style="padding:0; background:#fff;">
+      <div class="tab-pane hidden" id="panePrev" style="padding:0; background:#fff; gap:0;">
 
         <!-- Schedule Summary — shown only on Review step -->
         <div class="sched-summary hidden" id="prevSummary">
@@ -1536,8 +1537,7 @@ function resetModal(){
   step = 1;
   renderStepper(); updateFooter();
   switchTab('opts');
-  document.getElementById('paneOpts').scrollTop = 0;
-  document.getElementById('panePrev').scrollTop = 0;
+  document.querySelector('.right-panel').scrollTop = 0;
   document.getElementById('prevSummary').classList.add('hidden');
   const t = document.getElementById('chatThread');
   t.innerHTML = `
@@ -1580,13 +1580,16 @@ function jumpTo(n){
   if (n === 5){
     switchTab('prev');
     document.getElementById('prevSummary').classList.remove('hidden');
-    document.getElementById('panePrev').scrollTop = 0;
+    document.querySelector('.right-panel').scrollTop = 0;
   } else {
     document.getElementById('prevSummary').classList.add('hidden');
     switchTab('opts');
+    const rp = document.querySelector('.right-panel');
     const anchor = document.getElementById(ANCHORS[n - 1]);
-    const pane = document.getElementById('paneOpts');
-    if (anchor && pane) pane.scrollTo({ top: Math.max(0, anchor.offsetTop - 16), behavior: 'smooth' });
+    if (anchor && rp) {
+      // anchor.offsetTop is relative to paneOpts; add tab-bar height (44px)
+      rp.scrollTo({ top: Math.max(0, anchor.offsetTop + 44 - 16), behavior: 'smooth' });
+    }
   }
 }
 

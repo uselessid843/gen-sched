@@ -463,7 +463,29 @@ body {
 /* ─── Spatial 2-col ─── */
 .spatial-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-/* ─── Schedule Summary (Preview top card) ─── */
+/* ─── Review Summary chip bar ─── */
+.review-chip-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 12px 18px 13px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.review-chip-bar.hidden { display: none; }
+
+.rc-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #f7f8fa; border: 1px solid #eaeaea; border-radius: 999px;
+  padding: 5px 11px 5px 8px;
+  font-size: 12px; font-weight: 500; color: var(--text-2);
+  white-space: nowrap; line-height: 1;
+}
+.rc-chip svg { width: 13px; height: 13px; color: var(--muted-light); flex-shrink: 0; }
+.rc-chip strong { font-weight: 700; color: var(--text); }
+.rc-chip.accent { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+.rc-chip.accent svg { color: var(--green); }
+.rc-chip.accent strong { color: var(--green-text); }
+
+/* ─── Schedule Summary (old large card — now unused shell) ─── */
 .sched-summary {
   background: #fff;
   border-bottom: 1px solid var(--border);
@@ -1144,86 +1166,36 @@ body {
       <!-- PREVIEW PANE -->
       <div class="tab-pane hidden" id="panePrev" style="padding:0; background:#fff; gap:0;">
 
-        <!-- Schedule Summary — shown only on Review step -->
-        <div class="sched-summary hidden" id="prevSummary">
+        <!-- Review summary chip bar — shown only on step 5 -->
+        <div class="review-chip-bar hidden" id="prevSummary">
 
-          <div class="ss-topbar">
-            <span class="ss-title">Schedule Summary</span>
-            <div class="ss-badge">
-              <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l1.5 5.5L17 9l-5.5 1.5L10 16l-1.5-5.5L3 9l5.5-1.5z"/></svg>
-              Ready to generate
-            </div>
+          <div class="rc-chip accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            <strong>35</strong> activities
           </div>
 
-          <div class="ss-stats">
-            <div class="ss-stat">
-              <div class="ss-stat-val">35</div>
-              <div class="ss-stat-lbl">Activities</div>
-            </div>
-            <div class="ss-stat">
-              <div class="ss-stat-val">14</div>
-              <div class="ss-stat-lbl">Floors (12 + 2 BG)</div>
-            </div>
-            <div class="ss-stat">
-              <div class="ss-stat-val">27<span style="font-size:14px;font-weight:600;color:var(--muted-light)">mo</span></div>
-              <div class="ss-stat-lbl">Est. Duration</div>
-            </div>
-            <div class="ss-stat">
-              <div class="ss-stat-val">2</div>
-              <div class="ss-stat-lbl">Zones / Floor</div>
-            </div>
+          <div class="rc-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <strong>27</strong> months
           </div>
 
-          <div class="ss-details">
-            <div class="ss-dk">Type</div>
-            <div class="ss-dv"><span class="ss-pill green">Multifamily</span><span class="ss-sep">·</span>12 floors<span class="ss-sep">·</span>2 below grade</div>
-            <div class="ss-dk">Structure</div>
-            <div class="ss-dv"><span class="ss-pill">CIP Concrete</span><span class="ss-pill">Steel Frame</span></div>
-            <div class="ss-dk">MEP</div>
-            <div class="ss-dv"><span class="ss-pill">VRF / VRV</span><span class="ss-pill">Emergency Generator</span></div>
-            <div class="ss-dk">Long-lead</div>
-            <div class="ss-dv">Elevators <span class="ss-pill">26w</span><span class="ss-sep">·</span>Switchgear <span class="ss-pill">20w</span><span class="ss-sep">·</span>Curtain wall <span class="ss-pill">18w</span></div>
-            <div class="ss-dk">Layout</div>
-            <div class="ss-dv">Wing 1 / Wing 2<span class="ss-sep">·</span>2 zones per floor</div>
-            <div class="ss-dk">Timeline</div>
-            <div class="ss-dv">07/01/26 → <span class="ss-pill amber">TBD</span></div>
+          <div class="rc-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            <strong>6</strong> phases
           </div>
 
-          <div class="ss-phases">
-            <div class="ss-phases-title">Phase Breakdown</div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Preconstruction</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:11%;background:#a5b4fc;"></div></div>
-              <span class="ss-phase-dur">155d</span>
-            </div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Foundation</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:15%;background:#c4a882;"></div></div>
-              <span class="ss-phase-dur">210d</span>
-            </div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Structure</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:100%;background:#7dd3fc;"></div></div>
-              <span class="ss-phase-dur">690d</span>
-            </div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Envelope</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:72%;background:#5eead4;"></div></div>
-              <span class="ss-phase-dur">495d</span>
-            </div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Systems — MEP</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:87%;background:#c4b5fd;"></div></div>
-              <span class="ss-phase-dur">600d</span>
-            </div>
-            <div class="ss-phase-row">
-              <span class="ss-phase-name">Interior Finishes</span>
-              <div class="ss-phase-track"><div class="ss-phase-fill" style="width:51%;background:#6ee7b7;"></div></div>
-              <span class="ss-phase-dur">355d</span>
-            </div>
+          <div class="rc-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Longest: <strong>Structure&nbsp;&mdash;&nbsp;240d</strong>
+          </div>
+
+          <div class="rc-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Start <strong>Jul 1, 2026</strong>
           </div>
 
         </div>
+
 
         <!-- Activity list -->
         <div id="activityList" style="padding:0 0 24px;">
